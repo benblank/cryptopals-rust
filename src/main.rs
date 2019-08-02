@@ -1,24 +1,15 @@
-fn bytes_to_hex(bytes: &Vec<u8>) -> String {
-    bytes
-        .iter()
-        .map(|byte| format!("{:x}", byte))
-        .collect::<Vec<_>>()
-        .concat()
-}
-
-fn hex_to_bytes(hex: &str) -> Vec<u8> {
-    // https://stackoverflow.com/a/52992629/46387
-    (0..hex.len())
-        .step_by(2)
-        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
-        .collect()
-}
-
 fn main() {
-    let string1 = String::from("foo");
-    let bytes1 = string1.as_bytes().to_vec();
-    let hex = bytes_to_hex(&bytes1);
-    let bytes2 = hex_to_bytes(&hex);
+    let foo = "foo";
+    let hex_ = hex::encode(&foo);
+    let b64 = base64::encode(&foo);
 
-    println!("{} {:?} {} {:?}", string1, bytes1, hex, bytes2);
+    println!("{} {} {}", foo, hex_, b64);
+
+    let exercise1 = "49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d";
+    let string = String::from_utf8(hex::decode(&exercise1).unwrap()).unwrap();
+    let b64 = base64::encode(&string);
+
+    println!("{}", exercise1);
+    println!("{}", string);
+    println!("{}", b64);
 }
