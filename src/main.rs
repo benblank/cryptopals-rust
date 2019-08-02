@@ -1,11 +1,9 @@
 fn bytes_to_hex(bytes: &Vec<u8>) -> String {
-    let mut hex = Vec::new();
-
-    for byte in bytes.iter() {
-        hex.push(format!("{:x}", byte));
-    }
-
-    hex.concat()
+    bytes
+        .iter()
+        .map(|byte| format!("{:x}", byte))
+        .collect::<Vec<_>>()
+        .concat()
 }
 
 fn hex_to_bytes(hex: &str) -> Vec<u8> {
