@@ -1,4 +1,25 @@
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+
+fn break_single_byte_xor(encoded: &String) -> Option<String> {
+    let raw = hex::decode(encoded).unwrap();
+    let potential_keys = (0u8..255u8)
+        .filter(|byte| is_text_byte(*byte))
+        .filter(|byte| is_text(&xor_single_byte_key(&raw, *byte)))
+        .collect::<Vec<u8>>();
+    let most_frequent_chars: Vec<(&u8, char)> = potential_keys
+        .iter()
+        .map(|byte| (byte, most_frequent_char(&xor_single_byte_key(&raw, *byte))))
+        .collect();
+    let lotta_spaces: Vec<&(&u8, char)> = most_frequent_chars.iter().filter(|(_, character)| *character == ' ').collect();
+
+    if lotta_spaces.len() > 0 {
+        Some(String::from_utf8(xor_single_byte_key(&raw, *lotta_spaces[0].0)).unwrap())
+    } else {
+        None
+    }
+}
 
 fn is_text(message: &Vec<u8>) -> bool {
     message.iter().all(|byte| is_text_byte(*byte))
@@ -55,17 +76,18 @@ fn main() {
     println!("{}", String::from_utf8(xor).unwrap());
 
     let exercise3 = "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736";
-    let raw = hex::decode(exercise3).unwrap();
-    let potential_keys = (0u8..255u8)
-        .filter(|byte| is_text_byte(*byte))
-        .filter(|byte| is_text(&xor_single_byte_key(&raw, *byte)))
-        .collect::<Vec<u8>>();
-    let most_frequent_chars: Vec<(&u8, char)> = potential_keys
-        .iter()
-        .map(|byte| (byte, most_frequent_char(&xor_single_byte_key(&raw, *byte))))
-        .collect();
-    let lotta_spaces: Vec<&(&u8, char)> = most_frequent_chars.iter().filter(|(_, character)| *character == ' ').collect();
-    let lotta_spaces_key = lotta_spaces[0].0;
+    let maybe_broken = break_single_byte_xor(&String::from(exercise3));
 
-    println!("{}", String::from_utf8(xor_single_byte_key(&raw, *lotta_spaces_key)).unwrap());
+    match maybe_broken {
+        Some(broken) => println!("{}", broken),
+        None => panic!("No match found"),
+    }
+
+    let exercise4_file = File::open("4.txt").unwrap();
+
+    for line in BufReader::new(exercise4_file).lines().map(|line| line.unwrap()) {
+        if let Some(broken) = break_single_byte_xor(&String::from(line)) {
+            println!("{}", broken);
+        }
+    }
 }
