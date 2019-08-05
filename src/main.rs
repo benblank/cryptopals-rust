@@ -53,6 +53,10 @@ fn xor_equal_key(message: &Vec<u8>, key: &Vec<u8>) -> Vec<u8> {
     (0..message.len()).map(|i| message[i] ^ key[i]).collect()
 }
 
+fn xor_repeating_key(message: &Vec<u8>, key: &Vec<u8>) -> Vec<u8> {
+    (0..message.len()).map(|i| message[i] ^ key[i % key.len()]).collect()
+}
+
 fn xor_single_byte_key(message: &Vec<u8>, key: u8) -> Vec<u8> {
     message.iter().map(|byte| byte ^ key).collect()
 }
@@ -90,4 +94,13 @@ fn main() {
             println!("{}", broken);
         }
     }
+
+    let exercise5 = "Burning 'em, if you ain't quick and nimble\nI go crazy when I hear a cymbal";
+    let encoded = String::from(exercise5).into_bytes();
+    let encrypted = xor_repeating_key(&encoded, &String::from("ICE").into_bytes());
+    let encoded = hex::encode(encrypted);
+
+    assert_eq!(encoded, String::from("0b3637272a2b2e63622c2e69692a23693a2a3c6324202d623d63343c2a26226324272765272a282b2f20430a652e2c652a3124333a653e2b2027630c692b20283165286326302e27282f"));
+
+    println!("{}", exercise5);
 }
