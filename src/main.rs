@@ -1,24 +1,73 @@
 use std::collections::HashMap;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
+
+fn break_repeating_xor(message: &Vec<u8>) -> Option<String> {
+    let key_length = guess_key_length(&message);
+    let stripes = chunk_and_transpose(&message, key_length);
+    let key = stripes
+        .iter()
+        .map(|stripe| get_single_byte_key(stripe).unwrap_or(32))
+        .collect::<Vec<u8>>();
+
+    Some(String::from_utf8(xor_repeating_key(&message, &key)).unwrap())
+}
 
 fn break_single_byte_xor(encoded: &String) -> Option<String> {
     let raw = hex::decode(encoded).unwrap();
+
+    get_single_byte_key(&raw).map(|key| String::from_utf8(xor_single_byte_key(&raw, key)).unwrap())
+}
+
+fn chunk_and_transpose(message: &Vec<u8>, key_length: usize) -> Vec<Vec<u8>> {
+    let mut result = vec![Vec::new(); key_length];
+
+    for chunk in message.chunks(key_length) {
+        for (i, &byte) in chunk.iter().enumerate() {
+            result[i].push(byte);
+        }
+    }
+
+    result
+}
+
+fn get_single_byte_key(message: &Vec<u8>) -> Option<u8> {
     let potential_keys = (0u8..255u8)
         .filter(|byte| is_text_byte(*byte))
-        .filter(|byte| is_text(&xor_single_byte_key(&raw, *byte)))
+        .filter(|byte| is_text(&xor_single_byte_key(&message, *byte)))
         .collect::<Vec<u8>>();
     let most_frequent_chars: Vec<(&u8, char)> = potential_keys
         .iter()
-        .map(|byte| (byte, most_frequent_char(&xor_single_byte_key(&raw, *byte))))
+        .map(|byte| (byte, most_frequent_char(&xor_single_byte_key(&message, *byte))))
         .collect();
     let lotta_spaces: Vec<&(&u8, char)> = most_frequent_chars.iter().filter(|(_, character)| *character == ' ').collect();
 
     if lotta_spaces.len() > 0 {
-        Some(String::from_utf8(xor_single_byte_key(&raw, *lotta_spaces[0].0)).unwrap())
+        Some(*lotta_spaces[0].0)
     } else {
         None
     }
+}
+
+fn guess_key_length(message: &Vec<u8>) -> usize {
+    let mut distances: HashMap<usize, f64> = HashMap::new();
+
+    // Sequences shorter than ten characters are unlikely to be useful.
+    for size in 2..(message.len() / 10) {
+        distances.insert(size, hamming_distance(&message[..size].to_vec(), &message[size..(2 * size)].to_vec()) as f64 / size as f64);
+    }
+
+    let mut counts: Vec<(&usize, &f64)> = distances.iter().collect();
+
+    counts.sort_by(|(_, value_a), (_, value_b)| value_a.partial_cmp(value_b).unwrap());
+
+    *counts[0].0
+}
+
+fn hamming_distance(left: &Vec<u8>, right: &Vec<u8>) -> u32 {
+    let difference = xor_equal_key(left, right);
+
+    difference.iter().map(|byte| byte.count_ones()).sum()
 }
 
 fn is_text(message: &Vec<u8>) -> bool {
@@ -103,4 +152,11 @@ fn main() {
     assert_eq!(encoded, String::from("0b3637272a2b2e63622c2e69692a23693a2a3c6324202d623d63343c2a26226324272765272a282b2f20430a652e2c652a3124333a653e2b2027630c692b20283165286326302e27282f"));
 
     println!("{}", exercise5);
+
+    assert_eq!(hamming_distance(&String::from("this is a test").into_bytes(), &String::from("wokka wokka!!!").into_bytes()), 37);
+
+    let exercise6 = base64::decode(&fs::read_to_string("6.txt").unwrap().replace("\n", "")).unwrap();
+    let decrypted = break_repeating_xor(&exercise6).unwrap();
+
+    println!("{}", decrypted);
 }
