@@ -1,6 +1,7 @@
 mod cryptopals;
 mod exercise1;
 mod exercise2;
+mod exercise3;
 
 use std::collections::HashMap;
 use std::fs::{self, File};
@@ -15,12 +16,6 @@ fn break_repeating_xor(message: &Vec<u8>) -> String {
         .collect::<Vec<u8>>();
 
     String::from_utf8(xor_repeating_key(&message, &key)).unwrap()
-}
-
-fn break_single_byte_xor(encoded: &String) -> Option<String> {
-    let raw = hex::decode(encoded).unwrap();
-
-    get_single_byte_key(&raw).map(|key| String::from_utf8(xor_single_byte_key(&raw, key)).unwrap())
 }
 
 fn chi_squared_etaoin_shrdlu(candidate: &Vec<u8>) -> f64 {
@@ -145,14 +140,7 @@ fn xor_single_byte_key(message: &Vec<u8>, key: u8) -> Vec<u8> {
 fn main() {
     exercise1::run_and_print();
     exercise2::run_and_print();
-
-    let exercise3 = "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736";
-    let maybe_broken = break_single_byte_xor(&String::from(exercise3));
-
-    match maybe_broken {
-        Some(broken) => println!("{}", broken),
-        None => panic!("No match found"),
-    }
+    exercise3::run_and_print();
 
     // let exercise4_file = File::open("4.txt").unwrap();
 
