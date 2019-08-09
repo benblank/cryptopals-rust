@@ -2,21 +2,32 @@ use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 
-fn break_repeating_xor(message: &Vec<u8>) -> Option<String> {
+fn break_repeating_xor(message: &Vec<u8>) -> String {
     let key_length = guess_key_length(&message);
     let stripes = chunk_and_transpose(&message, key_length);
     let key = stripes
         .iter()
-        .map(|stripe| get_single_byte_key(stripe).unwrap_or(32))
+        .map(|stripe| get_single_byte_key(stripe).unwrap())
         .collect::<Vec<u8>>();
 
-    Some(String::from_utf8(xor_repeating_key(&message, &key)).unwrap())
+    String::from_utf8(xor_repeating_key(&message, &key)).unwrap()
 }
 
 fn break_single_byte_xor(encoded: &String) -> Option<String> {
     let raw = hex::decode(encoded).unwrap();
 
     get_single_byte_key(&raw).map(|key| String::from_utf8(xor_single_byte_key(&raw, key)).unwrap())
+}
+
+fn chi_squared_etaoin_shrdlu(candidate: &Vec<u8>) -> f64 {
+    let byte_counts = count_bytes(&candidate);
+    let expected_counts = get_expected_counts(candidate.len(), &byte_counts.keys().collect());
+
+    byte_counts.iter().map(|(byte, &actual)| {
+        let expected = expected_counts.get(&byte).unwrap();
+
+        (actual as f64 - expected).powf(2.0) / expected
+    }).sum()
 }
 
 fn chunk_and_transpose(message: &Vec<u8>, key_length: usize) -> Vec<Vec<u8>> {
@@ -31,22 +42,71 @@ fn chunk_and_transpose(message: &Vec<u8>, key_length: usize) -> Vec<Vec<u8>> {
     result
 }
 
-fn get_single_byte_key(message: &Vec<u8>) -> Option<u8> {
-    let potential_keys = (0u8..255u8)
-        .filter(|byte| is_text_byte(*byte))
-        .filter(|byte| is_text(&xor_single_byte_key(&message, *byte)))
-        .collect::<Vec<u8>>();
-    let most_frequent_chars: Vec<(&u8, char)> = potential_keys
-        .iter()
-        .map(|byte| (byte, most_frequent_char(&xor_single_byte_key(&message, *byte))))
-        .collect();
-    let lotta_spaces: Vec<&(&u8, char)> = most_frequent_chars.iter().filter(|(_, character)| *character == ' ').collect();
+fn count_bytes(message: &Vec<u8>) -> HashMap<u8, usize> {
+    let mut counts = HashMap::new();
 
-    if lotta_spaces.len() > 0 {
-        Some(*lotta_spaces[0].0)
-    } else {
-        None
+    for &byte in message {
+        counts.insert(byte, counts.get(&byte).unwrap_or(&0) + 1);
     }
+
+    counts
+}
+
+fn get_expected_counts(message_len: usize, bytes: &Vec<&u8>) -> HashMap<u8, f64> {
+    let mut expected_counts = HashMap::new();
+
+    for &&byte in bytes {
+        expected_counts.insert(byte, get_letter_frequency(byte) * message_len as f64);
+    }
+
+    expected_counts
+}
+
+fn get_letter_frequency(byte: u8) -> f64 {
+    match byte {
+        b'A' | b'a' => 8.55,
+        b'B' | b'b' => 1.60,
+        b'C' | b'c' => 3.16,
+        b'D' | b'd' => 3.87,
+        b'E' | b'e' => 12.10,
+        b'F' | b'f' => 2.18,
+        b'G' | b'g' => 2.09,
+        b'H' | b'h' => 4.96,
+        b'I' | b'i' => 7.33,
+        b'J' | b'j' => 0.22,
+        b'K' | b'k' => 0.81,
+        b'L' | b'l' => 4.21,
+        b'M' | b'm' => 2.53,
+        b'N' | b'n' => 7.17,
+        b'O' | b'o' => 7.47,
+        b'P' | b'p' => 2.07,
+        b'Q' | b'q' => 0.10,
+        b'R' | b'r' => 6.33,
+        b'S' | b's' => 6.73,
+        b'T' | b't' => 8.94,
+        b'U' | b'u' => 2.68,
+        b'V' | b'v' => 1.06,
+        b'W' | b'w' => 1.83,
+        b'X' | b'x' => 0.19,
+        b'Y' | b'y' => 1.72,
+        b'Z' | b'z' => 0.11,
+
+        // HACK: Without a frequency for spaces, chi-squared can't tell the
+        // difference between uppercase and lowercase.
+        // b' ' => 12.10,
+
+        _ => 0.0001,
+    }
+}
+
+fn get_single_byte_key(message: &Vec<u8>) -> Option<u8> {
+    let mut chi_squareds = (0u8..255u8)
+        .map(|byte| (byte, chi_squared_etaoin_shrdlu(&xor_single_byte_key(&message, byte))))
+        .collect::<Vec<(u8, f64)>>();
+
+    chi_squareds.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+
+    Some(chi_squareds[0].0)
 }
 
 fn guess_key_length(message: &Vec<u8>) -> usize {
@@ -65,41 +125,9 @@ fn guess_key_length(message: &Vec<u8>) -> usize {
 }
 
 fn hamming_distance(left: &Vec<u8>, right: &Vec<u8>) -> u32 {
-    let difference = xor_equal_key(left, right);
+    let difference = xor_repeating_key(left, right);
 
     difference.iter().map(|byte| byte.count_ones()).sum()
-}
-
-fn is_text(message: &Vec<u8>) -> bool {
-    message.iter().all(|byte| is_text_byte(*byte))
-}
-
-fn is_text_byte(byte: u8) -> bool {
-    byte < 127 && byte > 31 || byte == 9 || byte == 10 || byte == 13
-}
-
-fn most_frequent_char(bytes: &Vec<u8>) -> char {
-    let mut counts: HashMap<char, usize> = HashMap::new();
-
-    for character in String::from_utf8(bytes.clone()).unwrap().to_ascii_uppercase().chars() {
-        if !counts.contains_key(&character) {
-            counts.insert(character, 1);
-        } else {
-            counts.insert(character, counts.get(&character).unwrap() + 1);
-        }
-    }
-
-    let mut counts: Vec<(&char, &usize)> = counts.iter().collect();
-
-    counts.sort_by(|(_, value_a), (_, value_b)| value_a.cmp(value_b).reverse());
-
-    *counts[0].0
-}
-
-fn xor_equal_key(message: &Vec<u8>, key: &Vec<u8>) -> Vec<u8> {
-    assert_eq!(message.len(), key.len());
-
-    (0..message.len()).map(|i| message[i] ^ key[i]).collect()
 }
 
 fn xor_repeating_key(message: &Vec<u8>, key: &Vec<u8>) -> Vec<u8> {
@@ -121,7 +149,7 @@ fn main() {
 
     let exercise2 = hex::decode("1c0111001f010100061a024b53535009181c").unwrap();
     let key = hex::decode("686974207468652062756c6c277320657965").unwrap();
-    let xor = xor_equal_key(&exercise2, &key);
+    let xor = xor_repeating_key(&exercise2, &key);
     let b64 = hex::encode(&xor);
 
     assert_eq!("746865206b696420646f6e277420706c6179", b64);
@@ -136,13 +164,13 @@ fn main() {
         None => panic!("No match found"),
     }
 
-    let exercise4_file = File::open("4.txt").unwrap();
+    // let exercise4_file = File::open("4.txt").unwrap();
 
-    for line in BufReader::new(exercise4_file).lines().map(|line| line.unwrap()) {
-        if let Some(broken) = break_single_byte_xor(&String::from(line)) {
-            println!("{}", broken);
-        }
-    }
+    // for line in BufReader::new(exercise4_file).lines().map(|line| line.unwrap()) {
+    //     if let Some(broken) = break_single_byte_xor(&String::from(line)) {
+    //         println!("{}", broken);
+    //     }
+    // }
 
     let exercise5 = "Burning 'em, if you ain't quick and nimble\nI go crazy when I hear a cymbal";
     let encoded = String::from(exercise5).into_bytes();
@@ -156,7 +184,7 @@ fn main() {
     assert_eq!(hamming_distance(&String::from("this is a test").into_bytes(), &String::from("wokka wokka!!!").into_bytes()), 37);
 
     let exercise6 = base64::decode(&fs::read_to_string("6.txt").unwrap().replace("\n", "")).unwrap();
-    let decrypted = break_repeating_xor(&exercise6).unwrap();
+    let decrypted = break_repeating_xor(&exercise6);
 
     println!("{}", decrypted);
 }
