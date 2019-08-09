@@ -11,16 +11,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn xor_repeating_key_empty() {
+    fn xor_repeating_key_empty_message() {
         let empty: Vec<u8> = Vec::new();
 
         assert_eq!(empty, xor_repeating_key(&empty, &vec![b'a']).unwrap());
     }
 
     #[test]
-    fn xor_repeating_key_flip_case() {
-        // XORing against space flips case.
-        assert_eq!(vec![b'A', b'b', b'C', b'd'], xor_repeating_key(&vec![b'a', b'B', b'c', b'D'], &vec![b' ']).unwrap());
+    fn xor_repeating_key_equal_length_key() {
+        assert_eq!(vec![b'A', b'b', b'C', b'd'], xor_repeating_key(&vec![b' ', b' ', b' ', b' '], &vec![b'a', b'B', b'c', b'D']).unwrap());
+    }
+
+    #[test]
+    fn xor_repeating_key_short_key() {
+        assert_eq!(vec![b'A', b'b', b'A', b'b'], xor_repeating_key(&vec![b' ', b' ', b' ', b' '], &vec![b'a', b'B']).unwrap());
+    }
+
+    #[test]
+    fn xor_repeating_key_long_key() {
+        assert_eq!(vec![b'A', b'b'], xor_repeating_key(&vec![b' ', b' '], &vec![b'a', b'B', b'c', b'D']).unwrap());
     }
 
     #[test]
