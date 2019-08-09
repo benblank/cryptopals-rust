@@ -1,3 +1,7 @@
+mod cryptopals;
+mod exercise1;
+mod exercise2;
+
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
@@ -139,22 +143,8 @@ fn xor_single_byte_key(message: &Vec<u8>, key: u8) -> Vec<u8> {
 }
 
 fn main() {
-    let exercise1 = "49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d";
-    let string = String::from_utf8(hex::decode(&exercise1).unwrap()).unwrap();
-    let b64 = base64::encode(&string);
-
-    assert_eq!("SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t", b64);
-
-    println!("{}", string);
-
-    let exercise2 = hex::decode("1c0111001f010100061a024b53535009181c").unwrap();
-    let key = hex::decode("686974207468652062756c6c277320657965").unwrap();
-    let xor = xor_repeating_key(&exercise2, &key);
-    let b64 = hex::encode(&xor);
-
-    assert_eq!("746865206b696420646f6e277420706c6179", b64);
-
-    println!("{}", String::from_utf8(xor).unwrap());
+    exercise1::run_and_print();
+    exercise2::run_and_print();
 
     let exercise3 = "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736";
     let maybe_broken = break_single_byte_xor(&String::from(exercise3));
