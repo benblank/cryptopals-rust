@@ -2,10 +2,10 @@ mod cryptopals;
 mod exercise1;
 mod exercise2;
 mod exercise3;
+//mod exercise4;
 
 use std::collections::HashMap;
-use std::fs::{self, File};
-use std::io::{BufRead, BufReader};
+use std::fs;
 
 fn break_repeating_xor(message: &Vec<u8>) -> String {
     let key_length = guess_key_length(&message);
@@ -141,14 +141,7 @@ fn main() {
     exercise1::run_and_print();
     exercise2::run_and_print();
     exercise3::run_and_print();
-
-    // let exercise4_file = File::open("4.txt").unwrap();
-
-    // for line in BufReader::new(exercise4_file).lines().map(|line| line.unwrap()) {
-    //     if let Some(broken) = break_single_byte_xor(&String::from(line)) {
-    //         println!("{}", broken);
-    //     }
-    // }
+    //exercise4::run_and_print();
 
     let exercise5 = "Burning 'em, if you ain't quick and nimble\nI go crazy when I hear a cymbal";
     let encoded = String::from(exercise5).into_bytes();
