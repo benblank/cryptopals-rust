@@ -26,6 +26,38 @@ fn calculate_chi_squared(actual_counts: &HashMap<u8, f64>, expected_counts: &Has
     })
 }
 
+pub fn calculate_hamming_distance(left: &[u8], right: &[u8]) -> Result<u32, String> {
+    if left.len() != right.len() {
+        Err("Vectors must be of equal length".to_string())
+    } else {
+        if left.len() == 0 {
+            Ok(0)
+        } else {
+            Ok(xor_repeating_key(left, right)?.iter().map(|byte| byte.count_ones()).sum())
+        }
+    }
+}
+
+pub fn chunk_and_transpose(message: &[u8], chunk_count: usize) -> Result<Vec<Vec<u8>>, String> {
+    if chunk_count < 2 {
+        return Err("Number of chunks cannot be less than 2".to_string());
+    }
+
+    if message.len() < chunk_count {
+        return Err(format!("A message of length {} cannot be split into {} chunks (too short)", message.len(), chunk_count));
+    }
+
+    let mut result = vec![Vec::new(); chunk_count];
+
+    for chunk in message.chunks(chunk_count) {
+        for (i, &byte) in chunk.iter().enumerate() {
+            result[i].push(byte);
+        }
+    }
+
+    Ok(result)
+}
+
 fn count_bytes(message: &[u8]) -> HashMap<u8, usize> {
     let mut counts = HashMap::new();
 
@@ -111,6 +143,19 @@ pub fn get_single_byte_key(message: &[u8]) -> Result<u8, String> {
     }
 }
 
+pub fn guess_key_length(message: &[u8]) -> usize {
+    // Sequences shorter than ten characters are unlikely to be useful.
+    let mut distances = (2..(message.len() / 10))
+        // It's safe to use .unwrap() here because we already know the two
+        // slices are of the same length.
+        .map(|size| (size, calculate_hamming_distance(&message[..size], &message[size..(2 * size)]).unwrap() as f64 / size as f64))
+        .collect::<Vec<(usize, f64)>>();
+
+    distances.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+
+    distances[0].0
+}
+
 pub fn xor_repeating_key(message: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
     if key.len() == 0 {
         Err("Key must not be empty.".to_string())
@@ -178,6 +223,45 @@ mod tests {
     }
 
     #[test]
+    fn calculate_hamming_distance_works() {
+        assert_eq!(Ok(37), calculate_hamming_distance(
+            &"this is a test"
+                .to_string()
+                .into_bytes(),
+            &"wokka wokka!!!"
+                .to_string()
+                .into_bytes()
+        ));
+    }
+
+    #[test]
+    fn calculate_hamming_distance_empty() {
+        assert_eq!(Ok(0), calculate_hamming_distance(&Vec::new(), &Vec::new()));
+    }
+
+    #[test]
+    fn calculate_hamming_distance_unequal() {
+        assert!(calculate_hamming_distance(&vec![b'a'], &Vec::new()).is_err());
+    }
+
+    #[test]
+    fn chunk_and_transpose_works() {
+        assert_eq!(Ok(vec![vec![b'f', b'o', b'a'], vec![b'o', b'b', b'r']]), chunk_and_transpose(b"foobar", 2));
+    }
+
+    #[test]
+    fn chunk_and_transpose_empty() {
+        assert!(chunk_and_transpose(&Vec::new(), 2).is_err());
+        assert!(chunk_and_transpose(b"foobar", 10).is_err());
+    }
+
+    #[test]
+    fn chunk_and_transpose_too_few() {
+        assert!(chunk_and_transpose(b"foobar", 0).is_err());
+        assert!(chunk_and_transpose(b"foobar", 1).is_err());
+    }
+
+    #[test]
     fn count_bytes_empty_message() {
         assert_eq!(HashMap::new(), count_bytes(&Vec::new()));
     }
@@ -193,10 +277,6 @@ mod tests {
 
         assert_eq!(expected, count_bytes(&vec![b'a', b'b', b'c', b'd', b'a']));
     }
-
-    // get_byte_frequency is a "lookup table" and doesn't need testing?
-
-    // get_single_byte_key will be tested once chi_squared_etaoin_shrdlu is refactored.
 
     #[test]
     fn xor_repeating_key_empty_message() {
