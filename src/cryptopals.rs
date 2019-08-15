@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-fn calculate_chi_squared(actual_counts: &HashMap<u8, f64>, expected_counts: &HashMap<u8, f64>) -> Result<f64, String> {
+pub fn calculate_chi_squared(actual_counts: &HashMap<u8, f64>, expected_counts: &HashMap<u8, f64>) -> Result<f64, String> {
     (0u8..=255u8).map(|byte| {
         let actual = actual_counts.get(&byte).unwrap_or(&0.0);
         let maybe_expected = expected_counts.get(&byte);
@@ -58,7 +58,7 @@ pub fn chunk_and_transpose(message: &[u8], chunk_count: usize) -> Result<Vec<Vec
     Ok(result)
 }
 
-fn count_bytes(message: &[u8]) -> HashMap<u8, usize> {
+pub fn count_bytes(message: &[u8]) -> HashMap<u8, usize> {
     let mut counts = HashMap::new();
 
     for &byte in message {
@@ -68,7 +68,7 @@ fn count_bytes(message: &[u8]) -> HashMap<u8, usize> {
     counts
 }
 
-fn get_byte_frequency(byte: u8) -> f64 {
+pub fn get_byte_frequency(byte: u8) -> f64 {
     // FIXME: should really sum to 1.0
     match byte {
         b'A' | b'a' => 0.0855,
