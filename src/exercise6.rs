@@ -12,5 +12,5 @@ pub fn run_and_print() {
 
     let decrypted = String::from_utf8(xor_repeating_key(&message, &key).unwrap()).unwrap();
 
-    println!("{}", decrypted);
+    println!("{}\n{}", String::from_utf8(key).unwrap(), decrypted);
 }

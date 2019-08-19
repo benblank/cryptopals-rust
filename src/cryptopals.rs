@@ -33,17 +33,17 @@ pub fn calculate_chi_squared(
         })
 }
 
-pub fn calculate_hamming_distance(left: &[u8], right: &[u8]) -> Result<u32, String> {
-    if left.len() != right.len() {
-        Err("Vectors must be of equal length".to_string())
-    } else if left.is_empty() {
-        Ok(0)
-    } else {
-        Ok(xor_repeating_key(left, right)?
-            .iter()
-            .map(|byte| byte.count_ones())
-            .sum())
-    }
+pub fn calculate_index_of_coincidence(message: &[u8]) -> f64 {
+    let counts = count_bytes(&message);
+
+    (0u8..=255u8)
+        .map(|byte| {
+            let count = counts.get(&byte).unwrap_or(&0);
+
+            count * (count - 1)
+        })
+        .sum::<usize>() as f64
+        / (message.len() * (message.len() - 1)) as f64
 }
 
 pub fn chunk_and_transpose(message: &[u8], chunk_count: usize) -> Result<Vec<Vec<u8>>, String> {
@@ -162,24 +162,37 @@ pub fn get_single_byte_key(message: &[u8]) -> Result<u8, String> {
 }
 
 pub fn guess_key_length(message: &[u8]) -> usize {
+    let mut max_average = 0.0;
+
     // Sequences shorter than ten characters are unlikely to be useful.
-    let mut distances = (2..(message.len() / 10))
+    let mut sigmas = (2..(message.len() / 10))
         .map(|size| {
-            (
-                size,
-                // It's safe to use .unwrap() here because we already know the
-                // two slices are of the same length.
-                f64::from(
-                    calculate_hamming_distance(&message[..size], &message[size..(2 * size)])
-                        .unwrap(),
-                ) / size as f64,
-            )
+            let average = (0..size)
+                .map(|i| {
+                    calculate_index_of_coincidence(
+                        &message
+                            .iter()
+                            .skip(i)
+                            .step_by(size)
+                            .cloned()
+                            .collect::<Vec<u8>>(),
+                    )
+                })
+                .sum::<f64>()
+                / size as f64;
+            let sigma = average - max_average;
+
+            if average > max_average {
+                max_average = average;
+            }
+
+            (size, sigma)
         })
         .collect::<Vec<(usize, f64)>>();
 
-    distances.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+    sigmas.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
 
-    distances[0].0
+    sigmas[sigmas.len() - 1].0
 }
 
 pub fn xor_repeating_key(message: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
@@ -268,27 +281,6 @@ mod tests {
             Ok(1.5),
             calculate_chi_squared(&actual_counts, &expected_counts)
         );
-    }
-
-    #[test]
-    fn calculate_hamming_distance_works() {
-        assert_eq!(
-            Ok(37),
-            calculate_hamming_distance(
-                &"this is a test".to_string().into_bytes(),
-                &"wokka wokka!!!".to_string().into_bytes()
-            )
-        );
-    }
-
-    #[test]
-    fn calculate_hamming_distance_empty() {
-        assert_eq!(Ok(0), calculate_hamming_distance(&Vec::new(), &Vec::new()));
-    }
-
-    #[test]
-    fn calculate_hamming_distance_unequal() {
-        assert!(calculate_hamming_distance(&vec![b'a'], &Vec::new()).is_err());
     }
 
     #[test]
