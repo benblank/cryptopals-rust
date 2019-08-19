@@ -11,6 +11,10 @@ pub fn calculate_chi_squared(
             let maybe_expected = expected_counts.get(&byte);
 
             match maybe_expected {
+                // We're primarily interested in the "exactly zero" case, so we
+                // *really do* want strict comparison here, not epsilon
+                // comparison.
+                #[allow(clippy::float_cmp)]
                 Some(expected) => Ok(if actual == expected {
                     // Specifically, this handles the case of expecting 0 and
                     // finding 0, but can short-circuit a little bit of math, too.
@@ -32,15 +36,13 @@ pub fn calculate_chi_squared(
 pub fn calculate_hamming_distance(left: &[u8], right: &[u8]) -> Result<u32, String> {
     if left.len() != right.len() {
         Err("Vectors must be of equal length".to_string())
+    } else if left.is_empty() {
+        Ok(0)
     } else {
-        if left.len() == 0 {
-            Ok(0)
-        } else {
-            Ok(xor_repeating_key(left, right)?
-                .iter()
-                .map(|byte| byte.count_ones())
-                .sum())
-        }
+        Ok(xor_repeating_key(left, right)?
+            .iter()
+            .map(|byte| byte.count_ones())
+            .sum())
     }
 }
 
@@ -80,6 +82,9 @@ pub fn count_bytes(message: &[u8]) -> HashMap<u8, usize> {
 
 pub fn get_byte_frequency(byte: u8) -> f64 {
     // FIXME: should really sum to 1.0
+
+    // I'd rather have overlapping ranges than lose simplicity.
+    #[allow(clippy::match_overlapping_arm)]
     match byte {
         b'A' | b'a' => 0.0855,
         b'B' | b'b' => 0.0160,
@@ -147,8 +152,7 @@ pub fn get_single_byte_key(message: &[u8]) -> Result<u8, String> {
     match chi_squareds
         .iter()
         .filter(|(_, result)| result.is_ok())
-        .collect::<Vec<&(u8, Result<f64, String>)>>()
-        .len()
+        .count()
     {
         // A lack of candidates is caused by a bad `expected_counts`, caused by
         // problems with get_byte_frequency.
@@ -165,9 +169,10 @@ pub fn guess_key_length(message: &[u8]) -> usize {
                 size,
                 // It's safe to use .unwrap() here because we already know the
                 // two slices are of the same length.
-                calculate_hamming_distance(&message[..size], &message[size..(2 * size)]).unwrap()
-                    as f64
-                    / size as f64,
+                f64::from(
+                    calculate_hamming_distance(&message[..size], &message[size..(2 * size)])
+                        .unwrap(),
+                ) / size as f64,
             )
         })
         .collect::<Vec<(usize, f64)>>();
@@ -178,7 +183,7 @@ pub fn guess_key_length(message: &[u8]) -> usize {
 }
 
 pub fn xor_repeating_key(message: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
-    if key.len() == 0 {
+    if key.is_empty() {
         Err("Key must not be empty.".to_string())
     } else {
         Ok((0..message.len())
