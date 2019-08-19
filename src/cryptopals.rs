@@ -1,29 +1,32 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-pub fn calculate_chi_squared(actual_counts: &HashMap<u8, f64>, expected_counts: &HashMap<u8, f64>) -> Result<f64, String> {
-    (0u8..=255u8).map(|byte| {
-        let actual = actual_counts.get(&byte).unwrap_or(&0.0);
-        let maybe_expected = expected_counts.get(&byte);
+pub fn calculate_chi_squared(
+    actual_counts: &HashMap<u8, f64>,
+    expected_counts: &HashMap<u8, f64>,
+) -> Result<f64, String> {
+    (0u8..=255u8)
+        .map(|byte| {
+            let actual = actual_counts.get(&byte).unwrap_or(&0.0);
+            let maybe_expected = expected_counts.get(&byte);
 
-        match maybe_expected {
-            Some(expected) => Ok(if actual == expected {
-                // Specifically, this handles the case of expecting 0 and
-                // finding 0, but can short-circuit a little bit of math, too.
-                0.0
-            } else {
-                (actual - expected).powf(2.0) / expected
-            }),
-            None => Err(format!("Expected hash is missing an entry for {}", byte)),
-        }
-    }).fold(Ok(0.0), |sum, result| {
-        match (sum, result) {
+            match maybe_expected {
+                Some(expected) => Ok(if actual == expected {
+                    // Specifically, this handles the case of expecting 0 and
+                    // finding 0, but can short-circuit a little bit of math, too.
+                    0.0
+                } else {
+                    (actual - expected).powf(2.0) / expected
+                }),
+                None => Err(format!("Expected hash is missing an entry for {}", byte)),
+            }
+        })
+        .fold(Ok(0.0), |sum, result| match (sum, result) {
             (Ok(sum), Ok(result)) => Ok(sum + result),
             (Ok(_), Err(result)) => Err(result),
             (Err(err), Ok(_)) => Err(err),
             (Err(err1), Err(err2)) => Err(format!("{}\n{}", err1, err2)),
-        }
-    })
+        })
 }
 
 pub fn calculate_hamming_distance(left: &[u8], right: &[u8]) -> Result<u32, String> {
@@ -33,7 +36,10 @@ pub fn calculate_hamming_distance(left: &[u8], right: &[u8]) -> Result<u32, Stri
         if left.len() == 0 {
             Ok(0)
         } else {
-            Ok(xor_repeating_key(left, right)?.iter().map(|byte| byte.count_ones()).sum())
+            Ok(xor_repeating_key(left, right)?
+                .iter()
+                .map(|byte| byte.count_ones())
+                .sum())
         }
     }
 }
@@ -44,7 +50,11 @@ pub fn chunk_and_transpose(message: &[u8], chunk_count: usize) -> Result<Vec<Vec
     }
 
     if message.len() < chunk_count {
-        return Err(format!("A message of length {} cannot be split into {} chunks (too short)", message.len(), chunk_count));
+        return Err(format!(
+            "A message of length {} cannot be split into {} chunks (too short)",
+            message.len(),
+            chunk_count
+        ));
     }
 
     let mut result = vec![Vec::new(); chunk_count];
@@ -123,7 +133,10 @@ pub fn get_single_byte_key(message: &[u8]) -> Result<u8, String> {
                 .map(|(&byte, &count)| (byte, count as f64))
                 .collect::<HashMap<u8, f64>>();
 
-            (byte, calculate_chi_squared(&actual_counts, &expected_counts))
+            (
+                byte,
+                calculate_chi_squared(&actual_counts, &expected_counts),
+            )
         })
         .collect::<Vec<(u8, Result<f64, String>)>>();
 
@@ -135,7 +148,8 @@ pub fn get_single_byte_key(message: &[u8]) -> Result<u8, String> {
         .iter()
         .filter(|(_, result)| result.is_ok())
         .collect::<Vec<&(u8, Result<f64, String>)>>()
-        .len() {
+        .len()
+    {
         // A lack of candidates is caused by a bad `expected_counts`, caused by
         // problems with get_byte_frequency.
         0 => Err("No candidates found (this is a bug)".to_string()),
@@ -146,9 +160,16 @@ pub fn get_single_byte_key(message: &[u8]) -> Result<u8, String> {
 pub fn guess_key_length(message: &[u8]) -> usize {
     // Sequences shorter than ten characters are unlikely to be useful.
     let mut distances = (2..(message.len() / 10))
-        // It's safe to use .unwrap() here because we already know the two
-        // slices are of the same length.
-        .map(|size| (size, calculate_hamming_distance(&message[..size], &message[size..(2 * size)]).unwrap() as f64 / size as f64))
+        .map(|size| {
+            (
+                size,
+                // It's safe to use .unwrap() here because we already know the
+                // two slices are of the same length.
+                calculate_hamming_distance(&message[..size], &message[size..(2 * size)]).unwrap()
+                    as f64
+                    / size as f64,
+            )
+        })
         .collect::<Vec<(usize, f64)>>();
 
     distances.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
@@ -160,7 +181,9 @@ pub fn xor_repeating_key(message: &[u8], key: &[u8]) -> Result<Vec<u8>, String> 
     if key.len() == 0 {
         Err("Key must not be empty.".to_string())
     } else {
-        Ok((0..message.len()).map(|i| message[i] ^ key[i % key.len()]).collect())
+        Ok((0..message.len())
+            .map(|i| message[i] ^ key[i % key.len()])
+            .collect())
     }
 }
 
@@ -174,19 +197,22 @@ mod tests {
 
     // Modified from the assert_eq! definition.
     macro_rules! assert_partial_eq {
-        ($left:expr, $right:expr) => ({
+        ($left:expr, $right:expr) => {{
             match (&$left, &$right) {
                 (left_val, right_val) => {
                     let maybe_ordering = (*left_val).partial_cmp(&*right_val);
 
                     if maybe_ordering == None || maybe_ordering != Some(Ordering::Equal) {
-                        panic!(r#"assertion failed: `(left == right)`
+                        panic!(
+                            r#"assertion failed: `(left == right)`
     left: `{:?}`,
-    right: `{:?}`"#, &*left_val, &*right_val)
+    right: `{:?}`"#,
+                            &*left_val, &*right_val
+                        )
                     }
                 }
             }
-        });
+        }};
     }
 
     #[test]
@@ -205,33 +231,49 @@ mod tests {
 
     #[test]
     fn calculate_chi_squared_works() {
-        let actual_counts = (0u8..=255u8).map(|byte| (byte, match byte {
-            b'a' => 1.0,
-            b'b' => 2.0,
-            b'c' => 1.0,
-            _ => 1.0,
-        })).collect::<HashMap<u8, f64>>();
+        let actual_counts = (0u8..=255u8)
+            .map(|byte| {
+                (
+                    byte,
+                    match byte {
+                        b'a' => 1.0,
+                        b'b' => 2.0,
+                        b'c' => 1.0,
+                        _ => 1.0,
+                    },
+                )
+            })
+            .collect::<HashMap<u8, f64>>();
 
-        let expected_counts = (0u8..=255u8).map(|byte| (byte, match byte {
-            b'a' => 1.0,
-            b'b' => 1.0,
-            b'c' => 2.0,
-            _ => 1.0,
-        })).collect::<HashMap<u8, f64>>();
+        let expected_counts = (0u8..=255u8)
+            .map(|byte| {
+                (
+                    byte,
+                    match byte {
+                        b'a' => 1.0,
+                        b'b' => 1.0,
+                        b'c' => 2.0,
+                        _ => 1.0,
+                    },
+                )
+            })
+            .collect::<HashMap<u8, f64>>();
 
-        assert_partial_eq!(Ok(1.5), calculate_chi_squared(&actual_counts, &expected_counts));
+        assert_partial_eq!(
+            Ok(1.5),
+            calculate_chi_squared(&actual_counts, &expected_counts)
+        );
     }
 
     #[test]
     fn calculate_hamming_distance_works() {
-        assert_eq!(Ok(37), calculate_hamming_distance(
-            &"this is a test"
-                .to_string()
-                .into_bytes(),
-            &"wokka wokka!!!"
-                .to_string()
-                .into_bytes()
-        ));
+        assert_eq!(
+            Ok(37),
+            calculate_hamming_distance(
+                &"this is a test".to_string().into_bytes(),
+                &"wokka wokka!!!".to_string().into_bytes()
+            )
+        );
     }
 
     #[test]
@@ -246,7 +288,10 @@ mod tests {
 
     #[test]
     fn chunk_and_transpose_works() {
-        assert_eq!(Ok(vec![vec![b'f', b'o', b'a'], vec![b'o', b'b', b'r']]), chunk_and_transpose(b"foobar", 2));
+        assert_eq!(
+            Ok(vec![vec![b'f', b'o', b'a'], vec![b'o', b'b', b'r']]),
+            chunk_and_transpose(b"foobar", 2)
+        );
     }
 
     #[test]
@@ -287,17 +332,27 @@ mod tests {
 
     #[test]
     fn xor_repeating_key_equal_length_key() {
-        assert_eq!(vec![b'A', b'b', b'C', b'd'], xor_repeating_key(&vec![b' ', b' ', b' ', b' '], &vec![b'a', b'B', b'c', b'D']).unwrap());
+        assert_eq!(
+            vec![b'A', b'b', b'C', b'd'],
+            xor_repeating_key(&vec![b' ', b' ', b' ', b' '], &vec![b'a', b'B', b'c', b'D'])
+                .unwrap()
+        );
     }
 
     #[test]
     fn xor_repeating_key_short_key() {
-        assert_eq!(vec![b'A', b'b', b'A', b'b'], xor_repeating_key(&vec![b' ', b' ', b' ', b' '], &vec![b'a', b'B']).unwrap());
+        assert_eq!(
+            vec![b'A', b'b', b'A', b'b'],
+            xor_repeating_key(&vec![b' ', b' ', b' ', b' '], &vec![b'a', b'B']).unwrap()
+        );
     }
 
     #[test]
     fn xor_repeating_key_long_key() {
-        assert_eq!(vec![b'A', b'b'], xor_repeating_key(&vec![b' ', b' '], &vec![b'a', b'B', b'c', b'D']).unwrap());
+        assert_eq!(
+            vec![b'A', b'b'],
+            xor_repeating_key(&vec![b' ', b' '], &vec![b'a', b'B', b'c', b'D']).unwrap()
+        );
     }
 
     #[test]
@@ -314,6 +369,9 @@ mod tests {
 
     #[test]
     fn xor_single_byte_key_works() {
-        assert_eq!(vec![b'A', b'b', b'C', b'd'], xor_single_byte_key(&vec![b'a', b'B', b'c', b'D'], b' '));
+        assert_eq!(
+            vec![b'A', b'b', b'C', b'd'],
+            xor_single_byte_key(&vec![b'a', b'B', b'c', b'D'], b' ')
+        );
     }
 }
