@@ -161,7 +161,14 @@ pub fn get_single_byte_key(message: &[u8]) -> Result<u8, String> {
     }
 }
 
-pub fn guess_key_length(message: &[u8]) -> usize {
+pub fn guess_key_length(message: &[u8]) -> Result<usize, String> {
+    // This method can't produce meaningful results for very short messages.
+    // At least 20 characters are required to produce at least 2 chunks of at
+    // least 10 characters.
+    if message.len() < 20 {
+        return Err("Message is too short to analyze.".to_string());
+    }
+
     let mut max_average = 0.0;
 
     // Sequences shorter than ten characters are unlikely to be useful.
@@ -190,9 +197,11 @@ pub fn guess_key_length(message: &[u8]) -> usize {
         })
         .collect::<Vec<(usize, f64)>>();
 
+    // Can't happen: partial_cmp here can't return None because sigmas can't produce NaN.
     sigmas.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
 
-    sigmas[sigmas.len() - 1].0
+    // Can't happen: sigmas will never be empty.
+    Ok(sigmas.last().unwrap().0)
 }
 
 pub fn xor_repeating_key(message: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
