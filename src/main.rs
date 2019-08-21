@@ -6,11 +6,18 @@ mod exercise4;
 mod exercise5;
 mod exercise6;
 
+use std::env;
+
 fn main() {
-    exercise1::run_and_print();
-    exercise2::run_and_print();
-    exercise3::run_and_print();
-    exercise4::run_and_print();
-    exercise5::run_and_print();
-    exercise6::run_and_print();
+    for arg in env::args().skip(1) {
+        match arg.as_ref() {
+            "1" => exercise1::run_and_print(),
+            "2" => exercise2::run_and_print(),
+            "3" => exercise3::run_and_print(),
+            "4" => exercise4::run_and_print(),
+            "5" => exercise5::run_and_print(),
+            "6" => exercise6::run_and_print(),
+            _ => eprintln!("Could not find exercise number {}.", arg),
+        }
+    }
 }
