@@ -5,6 +5,7 @@ mod exercise3;
 mod exercise4;
 mod exercise5;
 mod exercise6;
+mod rijndael;
 
 use std::env;
 
