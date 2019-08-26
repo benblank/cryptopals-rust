@@ -36,69 +36,65 @@ const INVERSE_S_BOX: [u8; 256] = [
     0x17, 0x2b, 0x04, 0x7e, 0xba, 0x77, 0xd6, 0x26, 0xe1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0c, 0x7d,
 ];
 
-const ROUND_CONSTANTS: [u32; 11] = [
-    0x00000000, 0x01000000, 0x02000000, 0x04000000, 0x08000000, 0x10000000, 0x20000000, 0x40000000,
-    0x80000000, 0x1B000000, 0x36000000,
+const ROUND_CONSTANTS: [u8; 11] = [
+    0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36,
 ];
 
-fn get_key_schedule(bytes: &[u8]) -> Result<Vec<u8>, String> {
-    let bytes_length = bytes.len();
-    let size = match bytes_length {
-        16 => 44,
-        24 => 52,
-        32 => 60,
-        _ => return Err(format!("Invalid key length: {}", bytes_length)),
-    };
-    let mut key = Vec::with_capacity(bytes_length / 4);
-    let mut temp = [0, 0, 0, 0];
-
-    // Group key into four-byte words.
-    for chunk in bytes.chunks(4) {
-        temp[0] = chunk[0];
-        temp[1] = chunk[1];
-        temp[2] = chunk[2];
-        temp[3] = chunk[3];
-
-        key.push(u32::from_be_bytes(temp));
-    }
-
+fn get_key_schedule(key: &[u8]) -> Result<Vec<u8>, String> {
     let key_length = key.len();
-    let mut expanded_key: Vec<u32> = Vec::with_capacity(size);
+    let size = match key_length {
+        16 => 176,
+        24 => 208,
+        32 => 240,
+        _ => return Err(format!("Invalid key length: {}", key_length)),
+    };
+    let mut expanded_key: Vec<u8> = Vec::with_capacity(size);
 
-    for i in 0..size {
-        expanded_key.push(if i < key_length {
-            key[i]
+    for i in (0..size).step_by(4) {
+        if i < key_length {
+            expanded_key.push(key[i]);
+            expanded_key.push(key[i + 1]);
+            expanded_key.push(key[i + 2]);
+            expanded_key.push(key[i + 3]);
         } else if i % key_length == 0 {
-            expanded_key[i - key_length]
-                ^ sub_word(expanded_key[i - 1].rotate_left(8), &FORWARD_S_BOX)
-                ^ ROUND_CONSTANTS[i / key_length]
-        } else if key_length > 6 && i % key_length == 4 {
-            expanded_key[i - key_length] ^ sub_word(expanded_key[i - 1], &FORWARD_S_BOX)
+            // Note that this branch implements the rotation operation when
+            // lookup up indices in `expanded_key`: 0 => -3, 1 => -2, 2 => -1,
+            // and 3 => -4.
+            expanded_key.push(
+                expanded_key[i - key_length]
+                    ^ FORWARD_S_BOX[expanded_key[i - 3] as usize]
+                    ^ ROUND_CONSTANTS[i / key_length],
+            );
+            expanded_key.push(
+                expanded_key[i + 1 - key_length] ^ FORWARD_S_BOX[expanded_key[i - 2] as usize],
+            );
+            expanded_key.push(
+                expanded_key[i + 2 - key_length] ^ FORWARD_S_BOX[expanded_key[i - 1] as usize],
+            );
+            expanded_key.push(
+                expanded_key[i + 3 - key_length] ^ FORWARD_S_BOX[expanded_key[i - 4] as usize],
+            );
+        } else if key_length > 24 && i % key_length == 16 {
+            expanded_key
+                .push(expanded_key[i - key_length] ^ FORWARD_S_BOX[expanded_key[i - 4] as usize]);
+            expanded_key.push(
+                expanded_key[i + 1 - key_length] ^ FORWARD_S_BOX[expanded_key[i - 3] as usize],
+            );
+            expanded_key.push(
+                expanded_key[i + 2 - key_length] ^ FORWARD_S_BOX[expanded_key[i - 2] as usize],
+            );
+            expanded_key.push(
+                expanded_key[i + 3 - key_length] ^ FORWARD_S_BOX[expanded_key[i - 1] as usize],
+            );
         } else {
-            expanded_key[i - key_length] ^ expanded_key[i - 1]
-        });
+            expanded_key.push(expanded_key[i - key_length] ^ expanded_key[i - 4]);
+            expanded_key.push(expanded_key[i + 1 - key_length] ^ expanded_key[i - 3]);
+            expanded_key.push(expanded_key[i + 2 - key_length] ^ expanded_key[i - 2]);
+            expanded_key.push(expanded_key[i + 3 - key_length] ^ expanded_key[i - 1]);
+        };
     }
 
-    // Break expanded key down into bytes.
-    Ok(expanded_key
-        .iter()
-        .map(|x| x.to_be_bytes())
-        .collect::<Vec<[u8; 4]>>()
-        .iter()
-        .flatten()
-        .cloned()
-        .collect())
-}
-
-fn sub_word(word: u32, s_box: &[u8]) -> u32 {
-    let mut bytes = word.to_le_bytes();
-
-    bytes[0] = s_box[bytes[0] as usize];
-    bytes[1] = s_box[bytes[1] as usize];
-    bytes[2] = s_box[bytes[2] as usize];
-    bytes[3] = s_box[bytes[3] as usize];
-
-    u32::from_le_bytes(bytes)
+    Ok(expanded_key)
 }
 
 #[cfg(test)]
