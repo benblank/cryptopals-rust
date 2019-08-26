@@ -120,6 +120,12 @@ fn shift_rows(state: &mut [u8]) {
     state[7] = temp;
 }
 
+fn sub_bytes(state: &mut [u8], s_box: &[u8]) {
+    for i in 0..16 {
+        state[i] = s_box[state[i] as usize];
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -412,6 +418,23 @@ mod tests {
             0x04, 0x09, 0x0e, 0x03,
             0x08, 0x0d, 0x02, 0x07,
             0x0c, 0x01, 0x06, 0x0b,
+        ]);
+    }
+
+    #[test]
+    fn sub_bytes_works() {
+        // rustfmt will wrap at 14 bytes, which makes these tables harder to read.
+
+        #[rustfmt::skip]
+        let mut state = vec![
+            0x98, 0x59, 0x86, 0xc8, 0x0c, 0x12, 0x10, 0xac, 0xba, 0x8f, 0xb8, 0x0b, 0x5e, 0x69, 0x20, 0x75,
+        ];
+
+        sub_bytes(&mut state, &INVERSE_S_BOX);
+
+        #[rustfmt::skip]
+        assert_eq!(state, vec![
+            0xe2, 0x15, 0xdc, 0xb1, 0x81, 0x39, 0x7c, 0xaa, 0xc0, 0x73, 0x9a, 0x9e, 0x9d, 0xe4, 0x54, 0x3f,
         ]);
     }
 }
