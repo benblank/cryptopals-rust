@@ -142,6 +142,23 @@ fn inverse_mix_columns(state: &mut [u8]) {
     }
 }
 
+fn inverse_shift_rows(state: &mut [u8]) {
+    let temp = state[1];
+    state[1] = state[13];
+    state[13] = state[9];
+    state[9] = state[5];
+    state[5] = temp;
+
+    state.swap(2, 10);
+    state.swap(6, 14);
+
+    let temp = state[3];
+    state[3] = state[7];
+    state[7] = state[11];
+    state[11] = state[15];
+    state[15] = temp;
+}
+
 fn mix_column(column: &mut [u8]) {
     let copy = column.to_vec();
     let mut doubles = [0, 0, 0, 0];
@@ -531,6 +548,29 @@ mod tests {
         inverse_mix_column(&mut column);
 
         assert_eq!(column, [0x2d, 0x26, 0x31, 0x4c]);
+    }
+
+    #[test]
+    fn inverse_shift_rows_works() {
+        // rustfmt will wrap at 14 bytes, which makes these tables harder to read.
+
+        #[rustfmt::skip]
+        let mut state = vec![
+            0x00, 0x01, 0x02, 0x03,
+            0x04, 0x05, 0x06, 0x07,
+            0x08, 0x09, 0x0a, 0x0b,
+            0x0c, 0x0d, 0x0e, 0x0f,
+        ];
+
+        inverse_shift_rows(&mut state);
+
+        #[rustfmt::skip]
+        assert_eq!(state, vec![
+            0x00, 0x0d, 0x0a, 0x07,
+            0x04, 0x01, 0x0e, 0x0b,
+            0x08, 0x05, 0x02, 0x0f,
+            0x0c, 0x09, 0x06, 0x03,
+        ]);
     }
 
     #[test]
