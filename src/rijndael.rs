@@ -103,6 +103,72 @@ fn get_key_schedule(key: &[u8]) -> Result<Vec<u8>, String> {
     Ok(expanded_key)
 }
 
+fn gmul(a: u8, b: u8) -> u8 {
+    let mut a = a;
+    let mut b = b;
+    let mut product = 0;
+
+    for _ in 0..8 {
+        if b & 0x01 == 0x01 {
+            product ^= a;
+        }
+
+        let high_bit_set = a & 0x80 == 0x80;
+
+        a <<= 1;
+
+        if high_bit_set {
+            a ^= 0x1b;
+        }
+
+        b >>= 1;
+    }
+
+    product
+}
+
+fn inverse_mix_column(column: &mut [u8]) {
+    let copy = column.to_vec();
+
+    column[0] = gmul(copy[0], 14) ^ gmul(copy[3], 9) ^ gmul(copy[2], 13) ^ gmul(copy[1], 11);
+    column[1] = gmul(copy[1], 14) ^ gmul(copy[0], 9) ^ gmul(copy[3], 13) ^ gmul(copy[2], 11);
+    column[2] = gmul(copy[2], 14) ^ gmul(copy[1], 9) ^ gmul(copy[0], 13) ^ gmul(copy[3], 11);
+    column[3] = gmul(copy[3], 14) ^ gmul(copy[2], 9) ^ gmul(copy[1], 13) ^ gmul(copy[0], 11);
+}
+
+fn inverse_mix_columns(state: &mut [u8]) {
+    for i in (0..16).step_by(4) {
+        inverse_mix_column(&mut state[i..(i + 4)]);
+    }
+}
+
+fn mix_column(column: &mut [u8]) {
+    let copy = column.to_vec();
+    let mut doubles = [0, 0, 0, 0];
+
+    for i in 0..4 {
+        let h = if column[i] & 0x80 == 0x80 { 0x1b } else { 0x00 };
+
+        doubles[i] = (column[i] << 1) ^ h;
+    }
+
+    // This is slightly optimized from the gmul version and is equivalent to:
+    // column[0] = gmul(copy[0], 2) ^ gmul(copy[3], 1) ^ gmul(copy[2], 1) ^ gmul(copy[1], 3);
+    // column[1] = gmul(copy[1], 2) ^ gmul(copy[0], 1) ^ gmul(copy[3], 1) ^ gmul(copy[2], 3);
+    // column[2] = gmul(copy[2], 2) ^ gmul(copy[1], 1) ^ gmul(copy[0], 1) ^ gmul(copy[3], 3);
+    // column[3] = gmul(copy[3], 2) ^ gmul(copy[2], 1) ^ gmul(copy[1], 1) ^ gmul(copy[0], 3);
+    column[0] = doubles[0] ^ copy[3] ^ copy[2] ^ doubles[1] ^ copy[1];
+    column[1] = doubles[1] ^ copy[0] ^ copy[3] ^ doubles[2] ^ copy[2];
+    column[2] = doubles[2] ^ copy[1] ^ copy[0] ^ doubles[3] ^ copy[3];
+    column[3] = doubles[3] ^ copy[2] ^ copy[1] ^ doubles[0] ^ copy[0];
+}
+
+fn mix_columns(state: &mut [u8]) {
+    for i in (0..16).step_by(4) {
+        mix_column(&mut state[i..(i + 4)]);
+    }
+}
+
 fn shift_rows(state: &mut [u8]) {
     let temp = state[1];
     state[1] = state[5];
@@ -396,6 +462,129 @@ mod tests {
             0x4e, 0x5a, 0x66, 0x99, 0xa9, 0xf2, 0x4f, 0xe0, 0x7e, 0x57, 0x2b, 0xaa, 0xcd, 0xf8, 0xcd, 0xea,
             0x24, 0xfc, 0x79, 0xcc, 0xbf, 0x09, 0x79, 0xe9, 0x37, 0x1a, 0xc2, 0x3c, 0x6d, 0x68, 0xde, 0x36,
         ]);
+    }
+
+    #[test]
+    fn gmul_1() {
+        assert_eq!(gmul(0x12, 0x34), 0x05);
+    }
+
+    #[test]
+    fn gmul_2() {
+        assert_eq!(gmul(0x43, 0x21), 0xfb);
+    }
+
+    #[test]
+    fn gmul_3() {
+        assert_eq!(gmul(0xde, 0xad), 0xf1);
+    }
+
+    #[test]
+    fn inverse_mix_column_1() {
+        let mut column = [0x8e, 0x4d, 0xa1, 0xbc];
+
+        inverse_mix_column(&mut column);
+
+        assert_eq!(column, [0xdb, 0x13, 0x53, 0x45]);
+    }
+
+    #[test]
+    fn inverse_mix_column_2() {
+        let mut column = [0x9f, 0xdc, 0x58, 0x9d];
+
+        inverse_mix_column(&mut column);
+
+        assert_eq!(column, [0xf2, 0x0a, 0x22, 0x5c]);
+    }
+
+    #[test]
+    fn inverse_mix_column_3() {
+        let mut column = [0x01, 0x01, 0x01, 0x01];
+
+        inverse_mix_column(&mut column);
+
+        assert_eq!(column, [0x01, 0x01, 0x01, 0x01]);
+    }
+
+    #[test]
+    fn inverse_mix_column_4() {
+        let mut column = [0xc6, 0xc6, 0xc6, 0xc6];
+
+        inverse_mix_column(&mut column);
+
+        assert_eq!(column, [0xc6, 0xc6, 0xc6, 0xc6]);
+    }
+
+    #[test]
+    fn inverse_mix_column_5() {
+        let mut column = [0xd5, 0xd5, 0xd7, 0xd6];
+
+        inverse_mix_column(&mut column);
+
+        assert_eq!(column, [0xd4, 0xd4, 0xd4, 0xd5]);
+    }
+
+    #[test]
+    fn inverse_mix_column_6() {
+        let mut column = [0x4d, 0x7e, 0xbd, 0xf8];
+
+        inverse_mix_column(&mut column);
+
+        assert_eq!(column, [0x2d, 0x26, 0x31, 0x4c]);
+    }
+
+    #[test]
+    fn mix_column_1() {
+        let mut column = [0xdb, 0x13, 0x53, 0x45];
+
+        mix_column(&mut column);
+
+        assert_eq!(column, [0x8e, 0x4d, 0xa1, 0xbc]);
+    }
+
+    #[test]
+    fn mix_column_2() {
+        let mut column = [0xf2, 0x0a, 0x22, 0x5c];
+
+        mix_column(&mut column);
+
+        assert_eq!(column, [0x9f, 0xdc, 0x58, 0x9d]);
+    }
+
+    #[test]
+    fn mix_column_3() {
+        let mut column = [0x01, 0x01, 0x01, 0x01];
+
+        mix_column(&mut column);
+
+        assert_eq!(column, [0x01, 0x01, 0x01, 0x01]);
+    }
+
+    #[test]
+    fn mix_column_4() {
+        let mut column = [0xc6, 0xc6, 0xc6, 0xc6];
+
+        mix_column(&mut column);
+
+        assert_eq!(column, [0xc6, 0xc6, 0xc6, 0xc6]);
+    }
+
+    #[test]
+    fn mix_column_5() {
+        let mut column = [0xd4, 0xd4, 0xd4, 0xd5];
+
+        mix_column(&mut column);
+
+        assert_eq!(column, [0xd5, 0xd5, 0xd7, 0xd6]);
+    }
+
+    #[test]
+    fn mix_column_6() {
+        let mut column = [0x2d, 0x26, 0x31, 0x4c];
+
+        mix_column(&mut column);
+
+        assert_eq!(column, [0x4d, 0x7e, 0xbd, 0xf8]);
     }
 
     #[test]
