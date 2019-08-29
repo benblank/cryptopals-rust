@@ -5,6 +5,7 @@ mod exercise3;
 mod exercise4;
 mod exercise5;
 mod exercise6;
+mod exercise7;
 mod rijndael;
 
 use std::env;
@@ -18,6 +19,7 @@ fn main() {
             "4" => exercise4::run_and_print(),
             "5" => exercise5::run_and_print(),
             "6" => exercise6::run_and_print(),
+            "7" => exercise7::run_and_print(),
             _ => eprintln!("Could not find exercise number {}.", arg),
         }
     }
